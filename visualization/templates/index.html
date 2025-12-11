@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>联邦学习可视化监控系统</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@3.9.1/dist/chart.min.js"></script>
+    <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+</head>
+<body>
+    <div class="container">
+        <!-- 头部 -->
+        <header class="header">
+            <h1>🔬 联邦学习可视化监控系统</h1>
+            <div class="status-bar">
+                <span id="connection-status" class="status-indicator offline">未连接</span>
+                <span id="experiment-status" class="status-badge">未运行</span>
+            </div>
+        </header>
+
+        <!-- 控制面板 -->
+        <div class="control-panel card">
+            <h3>🎛️ 控制面板</h3>
+            <div class="control-tabs">
+                <button class="tab-btn active" onclick="showTab('nodes')">节点管理</button>
+                <button class="tab-btn" onclick="showTab('training')">训练控制</button>
+                <button class="tab-btn" onclick="showTab('logs')">日志输出</button>
+                <button class="tab-btn" onclick="showTab('analysis')">数据分析</button>
+            </div>
+
+            <!-- 节点管理标签页 -->
+            <div id="tab-nodes" class="tab-content active">
+                <div class="control-section">
+                    <h4>节点操作</h4>
+                    <div class="node-controls">
+                        <div class="input-group">
+                            <label>节点ID:</label>
+                            <select id="node-select">
+                                <option value="node_1">节点 1 (低端手机)</option>
+                                <option value="node_2">节点 2 (中端平板)</option>
+                                <option value="node_3">节点 3 (边缘网关)</option>
+                            </select>
+                        </div>
+                        <div class="button-group">
+                            <button class="btn btn-success" onclick="startNode()">🚀 启动节点</button>
+                            <button class="btn btn-danger" onclick="stopNode()">⏹️ 停止节点</button>
+                            <button class="btn btn-secondary" onclick="refreshNodes()">🔄 刷新状态</button>
+                            <button class="btn btn-primary" onclick="startAllNodes()">▶️ 启动所有节点</button>
+                        </div>
+                    </div>
+                    <div class="info-box" style="background: #f0f9ff; padding: 10px; border-radius: 6px; margin: 15px 0; font-size: 13px; color: #0369a1;">
+                        <strong>💡 提示:</strong> 首次使用需要先运行 <code>prepare_federated_data.py</code> 准备数据，然后为每个节点配置数据集。
+                    </div>
+                    <div id="nodes-status" class="nodes-status-list"></div>
+                </div>
+            </div>
+
+            <!-- 训练控制标签页 -->
+            <div id="tab-training" class="tab-content">
+                <div class="control-section">
+                    <h4>训练配置</h4>
+                    <div class="training-config">
+                        <div class="input-group">
+                            <label>训练轮数:</label>
+                            <input type="number" id="rounds-input" value="5" min="1" max="50">
+                        </div>
+                        <div class="input-group">
+                            <label>批次大小:</label>
+                            <input type="number" id="batch-size-input" value="128" min="1">
+                        </div>
+                        <div class="input-group">
+                            <label>学习率:</label>
+                            <input type="number" id="lr-input" value="0.00004" step="0.00001">
+                        </div>
+                    </div>
+                    <div class="button-group">
+                        <button class="btn btn-success" onclick="startTraining()">开始训练</button>
+                        <button class="btn btn-danger" onclick="stopTraining()">停止训练</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- 日志输出标签页 -->
+            <div id="tab-logs" class="tab-content">
+                <div class="control-section">
+                    <div class="log-controls">
+                        <button class="btn btn-secondary" onclick="clearLogs()">清空日志</button>
+                        <select id="log-level-filter" onchange="filterLogs()">
+                            <option value="all">所有级别</option>
+                            <option value="info">信息</option>
+                            <option value="warning">警告</option>
+                            <option value="error">错误</option>
+                        </select>
+                    </div>
+                    <div id="logs-container" class="logs-container"></div>
+                </div>
+            </div>
+
+            <!-- 数据分析标签页 -->
+            <div id="tab-analysis" class="tab-content">
+                <div class="control-section">
+                    <h4>收敛分析</h4>
+                    <div id="convergence-analysis" class="analysis-result"></div>
+                    <button class="btn btn-primary" onclick="analyzeConvergence()">分析收敛性</button>
+                    
+                    <h4 style="margin-top: 20px;">节点性能对比</h4>
+                    <div id="node-performance" class="analysis-result"></div>
+                    <button class="btn btn-primary" onclick="analyzeNodePerformance()">分析节点性能</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- 实验信息卡片 -->
+        <div class="info-cards">
+            <div class="card">
+                <h3>实验配置</h3>
+                <div id="experiment-config" class="config-info">
+                    <p>等待实验开始...</p>
+                </div>
+            </div>
+            <div class="card">
+                <h3>训练进度</h3>
+                <div class="progress-info">
+                    <div class="progress-bar-container">
+                        <div id="progress-bar" class="progress-bar" style="width: 0%"></div>
+                    </div>
+                    <p id="progress-text">轮次: 0 / 0</p>
+                    <p id="elapsed-time">运行时间: 00:00:00</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- 详细训练状态面板 -->
+        <div class="card full-width" id="detailed-training-status" style="display: none;">
+            <h3>📊 详细训练状态</h3>
+            <div class="detailed-status-container">
+                <div class="status-grid">
+                    <div class="status-item">
+                        <div class="status-label">当前轮次</div>
+                        <div class="status-value" id="current-round-detail">-</div>
+                    </div>
+                    <div class="status-item">
+                        <div class="status-label">轮次进度</div>
+                        <div class="status-value" id="round-progress">-</div>
+                    </div>
+                    <div class="status-item">
+                        <div class="status-label">本轮已用时间</div>
+                        <div class="status-value" id="round-elapsed-time">00:00</div>
+                    </div>
+                    <div class="status-item">
+                        <div class="status-label">预计剩余时间</div>
+                        <div class="status-value" id="estimated-remaining-time">计算中...</div>
+                    </div>
+                    <div class="status-item">
+                        <div class="status-label">平均每轮时间</div>
+                        <div class="status-value" id="avg-round-time">-</div>
+                    </div>
+                    <div class="status-item">
+                        <div class="status-label">训练速度</div>
+                        <div class="status-value" id="training-speed">-</div>
+                    </div>
+                </div>
+                
+                <div class="current-metrics">
+                    <h4>当前轮次指标</h4>
+                    <div class="metrics-grid">
+                        <div class="metric-item">
+                            <span class="metric-label">Loss:</span>
+                            <span class="metric-value" id="current-loss">-</span>
+                        </div>
+                        <div class="metric-item">
+                            <span class="metric-label">F1 Score:</span>
+                            <span class="metric-value" id="current-f1">-</span>
+                        </div>
+                        <div class="metric-item">
+                            <span class="metric-label">Accuracy:</span>
+                            <span class="metric-value" id="current-accuracy">-</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="nodes-training-status">
+                    <h4>节点训练状态</h4>
+                    <div id="nodes-training-detail" class="nodes-detail-list">
+                        <p class="empty-message">等待节点开始训练...</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- 节点拓扑图 -->
+        <div class="card full-width">
+            <h3>节点拓扑图</h3>
+            <div id="node-topology" class="topology-container">
+                <div class="researcher-node">
+                    <div class="node-icon researcher">👨‍🔬</div>
+                    <div class="node-label">研究者 (Researcher)</div>
+                </div>
+                <div id="nodes-container" class="nodes-container">
+                    <p class="empty-message">等待节点连接...</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- 指标图表 -->
+        <div class="charts-container">
+            <div class="card chart-card">
+                <h3>全局损失 (Loss)</h3>
+                <canvas id="loss-chart"></canvas>
+            </div>
+            <div class="card chart-card">
+                <h3>F1 分数</h3>
+                <canvas id="f1-chart"></canvas>
+            </div>
+            <div class="card chart-card">
+                <h3>准确率 (Accuracy)</h3>
+                <canvas id="accuracy-chart"></canvas>
+            </div>
+        </div>
+
+        <!-- 节点详细信息 -->
+        <div class="card full-width">
+            <h3>节点详细信息</h3>
+            <div id="nodes-detail" class="nodes-detail">
+                <p class="empty-message">等待节点数据...</p>
+            </div>
+        </div>
+
+        <!-- 训练历史 -->
+        <div class="card full-width">
+            <h3>训练历史</h3>
+            <div id="training-history" class="training-history">
+                <p class="empty-message">暂无训练历史</p>
+            </div>
+        </div>
+    </div>
+
+    <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+    <script>
+        // 错误处理
+        window.addEventListener('error', function(e) {
+            console.error('JavaScript Error:', e.error);
+            document.body.innerHTML = '<h1>JavaScript Error</h1><p>' + e.error + '</p><pre>' + e.error.stack + '</pre>';
+        });
+        
+        // 检查页面是否加载
+        window.addEventListener('load', function() {
+            console.log('Page loaded successfully');
+            if (document.body.innerHTML.trim() === '') {
+                console.error('Page body is empty!');
+            }
+        });
+    </script>
+</body>
+</html>
