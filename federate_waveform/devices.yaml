@@ -1,0 +1,42 @@
+# devices.yaml
+# 放到 federate_waveform/ 目录下
+
+devices:
+  - id: node_1
+    fb_node_path: "fbm-node-1"        # 对应你启动节点时的 --path
+    type: "phone_low_end"
+    compute_power: "low"
+    cpu_threads: 1                    # 在 Mac 上限制 PyTorch 线程数
+    max_batch_size: 32
+    simulated_compute_delay_ms: 180   # 每个 batch 人为增加延迟，模拟慢设备
+    upload_latency_ms: 250            # 上行延迟
+    download_latency_ms: 200          # 下行延迟（如果需要）
+    bandwidth_kbps: 200               # 模拟带宽
+    online_pattern: "intermittent"    # 间歇在线
+    model_variant: "small"            # 使用蒸馏/小模型
+
+  - id: node_2
+    fb_node_path: "fbm-node-2"
+    type: "tablet_mid"
+    compute_power: "medium"
+    cpu_threads: 2
+    max_batch_size: 64
+    simulated_compute_delay_ms: 60
+    upload_latency_ms: 100
+    download_latency_ms: 80
+    bandwidth_kbps: 800
+    online_pattern: "mostly_online"
+    model_variant: "base"
+
+  - id: node_3
+    fb_node_path: "fbm-node-3"
+    type: "edge_gateway"
+    compute_power: "high"
+    cpu_threads: 4
+    max_batch_size: 128
+    simulated_compute_delay_ms: 0
+    upload_latency_ms: 20
+    download_latency_ms: 20
+    bandwidth_kbps: 5000
+    online_pattern: "always_on"
+    model_variant: "large"
